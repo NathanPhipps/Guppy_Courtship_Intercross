@@ -1,0 +1,280 @@
+---
+title: "Untitled"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+
+#Clear R's brain
+rm(list=ls())
+
+setwd("C:/Users/phipp/OneDrive/Documents/Grad School/Courtship Analysis")
+mydata<-read.csv("finalcourt.csv")
+mydata
+#Calling all libraries
+
+names(mydata)
+
+length(mydata$ID)
+length(mydata$Stage)
+
+library(tidyverse)
+library(lmerTest)
+
+
+## Parsed with column specification:
+cols(ID = col_integer(),
+     Pop = col_character(),
+     Family = col_integer(),
+     DateBorn = col_character(),
+     Sex = col_character(),
+     Length = col_double(),
+     Stage = col_character(),
+     Date = col_character(),
+     Coder = col_character(),
+     Chase = col_integer(),
+     ForcedCop = col_integer(),
+     G_Swing = col_integer(),
+     Sigmoid = col_integer(),
+     Suc_SigCop = col_integer(),
+     Ignore = col_integer(),
+     Lunge = col_integer(),
+     Nip = col_integer(),
+     Suc_ForcCop = col_integer(),
+     Copulated = col_character())
+
+data %>%
+  mutate(Pop = as.factor(Pop)) %>%
+  mutate(Stage = as.factor(Stage)) %>%
+  mutate(Family = as.factor(Family)) %>%
+  mutate(ID = as.factor(ID)) -> data
+
+
+
+
+######################################################################################
+#ggplot to test aggression correlations
+library(tidyverse)
+
+court <- read_csv("finalcourt.csv")
+
+court %>%
+  mutate(Pop = as.factor(Pop)) %>%
+  mutate(Stage = as.factor(Stage)) %>%
+  mutate(Family = as.factor(Family)) %>%
+  mutate(ID = as.factor(ID)) -> court
+
+court
+
+#Sigmoids by Population and Stage accounting for length
+
+lmm.Sig <- lmer(Sigmoid ~ Pop*Stage + Length 
+                + (1|Family/ID),
+                data=court)
+lmm.Sig
+
+anova(lmm.Sig)
+
+ranova(lmm.Sig)
+
+#Forced Copulations by Population and Stage accounting for length
+
+lmm.Force <- lmer(ForcedCop ~ Pop*Stage + Length
+                  + (1|Family/ID),
+                  data=court)
+
+anova(lmm.Force)
+
+ranova(lmm.Force)
+
+#Gonopodium Swings by Population and Stage accounting for length
+
+lmm.Swing <- lmer(G_Swing ~ Pop*Stage + Length
+                  + (1|Family/ID),
+                  data=court)
+
+anova(lmm.Swing)
+
+ranova(lmm.Swing)
+
+############################### GRAPHING ##################################################
+### Function for getting standard error
+## Gives count, mean, standard deviation, standard error of the mean, and confidence interval (default 95%).
+##   data: a data frame.
+##   measurevar: the name of a column that contains the variable to be summariezed
+##   groupvars: a vector containing names of columns that contain grouping variables
+##   na.rm: a boolean that indicates whether to ignore NA's
+##   conf.interval: the percent range of the confidence interval (default is 95%)
+summarySE <- function(data=NULL, measurevar, groupvars=NULL, na.rm=FALSE,
+                      conf.interval=.95, .drop=TRUE) {
+  library(plyr)
+  
+  # New version of length which can handle NA's: if na.rm==T, don't count them
+  length2 <- function (x, na.rm=FALSE) {
+    if (na.rm) sum(!is.na(x))
+    else       length(x)
+  }
+  
+  # This does the summary. For each group's data frame, return a vector with
+  # N, mean, and sd
+  datac <- ddply(data, groupvars, .drop=.drop,
+                 .fun = function(xx, col) {
+                   c(N    = length2(xx[[col]], na.rm=na.rm),
+                     mean = mean   (xx[[col]], na.rm=na.rm),
+                     sd   = sd     (xx[[col]], na.rm=na.rm)
+                   )
+                 },
+                 measurevar
+  )
+  
+  # Rename the "mean" column    
+  datac <- rename(datac, c("mean" = measurevar))
+  
+  datac$se <- datac$sd / sqrt(datac$N)  # Calculate standard error of the mean
+  
+  # Confidence interval multiplier for standard error
+  # Calculate t-statistic for confidence interval: 
+  # e.g., if conf.interval is .95, use .975 (above/below), and use df=N-1
+  ciMult <- qt(conf.interval/2 + .5, datac$N-1)
+  datac$ci <- datac$se * ciMult
+  
+  return(datac)
+}
+
+
+#######################################################################################
+### Dodge
+
+pd <- position_dodge(0.5) # move them 0.05 to the left and right
+
+court$Pop <- factor(court$Pop, levels=c("CM","CQ","QC","QH"))
+court$Stage <- factor(court$Stage, levels=c("Before", "After"))
+
+dSig <- summarySE(court, measurevar="Sigmoid",
+                  groupvars=c("Pop","Stage"))
+dSig
+
+head(dSig)
+
+graph.Sig <- ggplot(dSig, aes(x=Stage, y=Sigmoid, group=Pop, col=Pop)) +
+  geom_errorbar(aes(ymin=Sigmoid-se, ymax=Sigmoid+se), position = pd, width=0.1, colour="black", size=1) +
+  geom_line(size=1, position = pd) + 
+  geom_point(position = pd, size=3) +
+  scale_fill_brewer(palette="Set1") +
+  labs(x="Exposure Stage", y="# Sigmoids +/- SE") +
+  guides(color=guide_legend("Population/Cross"))  +
+  theme_classic() +
+  theme(axis.title.x = element_text(face = "bold", colour = "black", size = 16, vjust = -1),
+        axis.text.x  = element_text(vjust=0.5, size=12, face = "bold", colour = "black"),
+        axis.title.y = element_text(face = "bold", colour = "black", size = 16, vjust = 3),
+        axis.text.y = element_text(vjust = 0.5, size = 12, face = "bold", colour = "black"),
+        legend.title = element_text(size = 13),
+        legend.text = element_text(size = 11, face = "italic"),
+        legend.position=c(0.9, 0.9),
+        legend.background = element_rect(size=0.5, color=1),
+        plot.margin=unit(c(1,1,1.5,1.2),"cm"))
+
+graph.Sig
+
+dForced <- summarySE(court, measurevar="ForcedCop",
+                     groupvars=c("Pop","Stage"))
+
+head(dForced)
+graph.Forced <- ggplot(dForced, aes(x=Stage, y=ForcedCop, group=Pop, col=Pop)) +
+  geom_errorbar(aes(ymin=ForcedCop-se, ymax=ForcedCop+se), position = pd, width=0.1, colour="black", size=1) +
+  geom_line(size=1, position = pd) + 
+  geom_point(position = pd, size=3) +
+  scale_fill_brewer(palette="Set1") +
+  labs(x="Exposure Stage", y="# Forced Copulations +/- SE") +
+  guides(color=guide_legend("Population/Cross"))  +
+  theme_classic() +
+  theme(axis.title.x = element_text(face = "bold", colour = "black", size = 16, vjust = -1),
+        axis.text.x  = element_text(vjust=0.5, size=12, face = "bold", colour = "black"),
+        axis.title.y = element_text(face = "bold", colour = "black", size = 16, vjust = 3),
+        axis.text.y = element_text(vjust = 0.5, size = 12, face = "bold", colour = "black"),
+        legend.title = element_text(size = 13),
+        legend.text = element_text(size = 11, face = "italic"),
+        legend.position=c(0.15, 0.8),
+        legend.background = element_rect(size=0.5, color=1),
+        plot.margin=unit(c(1,1,1.5,1.2),"cm"))
+
+graph.Forced
+
+
+dSwing <- summarySE(court, measurevar="G_Swing",
+                    groupvars=c("Pop","Stage"))
+
+head(dSwing)
+
+graph.Swing <- ggplot(dSwing, aes(x=Stage, y=G_Swing, group=Pop, col=Pop)) +
+  geom_errorbar(aes(ymin=G_Swing-se, ymax=G_Swing+se), position = pd, width=0.1, colour="black", size=1) +
+  geom_line(size=1, position = pd) + 
+  geom_point(position = pd, size=3) +
+  scale_fill_brewer(palette="Set1") +
+  labs(x="Exposure Stage", y="# Gonopodium Swings +/- SE") +
+  guides(color=guide_legend("Population/Cross"))  +
+  theme_classic() +
+  theme(axis.title.x = element_text(face = "bold", colour = "black", size = 16, vjust = -1),
+        axis.text.x  = element_text(vjust=0.5, size=12, face = "bold", colour = "black"),
+        axis.title.y = element_text(face = "bold", colour = "black", size = 16, vjust = 3),
+        axis.text.y = element_text(vjust = 0.5, size = 12, face = "bold", colour = "black"),
+        legend.title = element_text(size = 13),
+        legend.text = element_text(size = 11, face = "italic"),
+        legend.position=c(0.15, 0.8),
+        legend.background = element_rect(size=0.5, color=1),
+        plot.margin=unit(c(1,1,1.5,1.2),"cm"))
+
+graph.Swing
+
+####################################################################################
+#GG scatterplots
+
+ggplot(court, aes(x = G_Swing, y = ForcedCop)) + 
+  geom_point() +
+  theme_classic()
+court
+#Add a regression line
+ggplot(court, aes(x = court$ForcedCop, y = court$Sigmoid)) + 
+  geom_point(color='blue') +
+  theme_classic() +
+  geom_smooth(method = "lm", se = FALSE)
+
+cor(court$ForcedCop, court$Sigmoid)
+#Find moderate positive correlation with correlation coefficient 0.551
+
+court
+
+#################################################################################
+#Try to run tests of aggressive vs passive behaviors
+
+library(forcats)
+
+levels(
+  
+  names(court)
+  head(court)
+  #Try to combine variables
+  
+  mutate(ForcedCop = as.factor(ForcedCop))
+  
+  court_temp <- court %>%
+    mutate(Category = fct_recode(Category,
+                                 "Aggressive" = "ForcedCop & Lunge & Nip",
+                                 "Passive" = "G_Swing & Chase & Sigmoid"))
+  
+  
+  menu_temp <- menu %>%
+    mutate(Category = fct_recode(Category,
+                                 "Meats" = "Beef & Pork",
+                                 "Meats" = "Chicken & Fish",
+                                 "Beverages" = "Coffee & Tea",
+                                 "Sweets" = "Desserts",
+                                 "Sweets" = "Smoothies & Shakes"))
+  
+  
+  
+  ?dbl
+  ?fct
+  
+  
